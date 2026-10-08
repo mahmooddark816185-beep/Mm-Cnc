@@ -412,7 +412,7 @@ export default function App() {
         <section className="truth-section section-pad"><div className="truth-main"><span className="truth-icon"><MoveUpRight size={24} /></span><h2>{t.formatsTitle}</h2><p>{t.formatsBody}</p></div><div className="truth-list"><div><Check size={17} />{t.formatsDxf}</div><div><Check size={17} />{t.formatsStl}</div><div><Check size={17} />{t.formatsGcode}</div></div></section>
       </main>
 
-      <footer className="site-footer section-pad"><div className="footer-top"><div><div className="footer-brand">Mm <strong>Cnc</strong><span>™</span></div><p>{t.footerLine}</p></div><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="footer-contact"><MessageCircle size={20} /><span><small>{t.footerContact}</small><b dir="ltr">{PHONE_DISPLAY}</b></span><ArrowUpRight size={19} /></a></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Mm Cnc</span><span><ShieldCheck size={15} />{t.footerLocal}</span><span>{t.footerLabel}</span></div></footer>
+      <footer className="site-footer section-pad"><div className="footer-top"><div><div className="footer-brand">Mm <strong>Cnc</strong><span>™</span></div></div><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="footer-contact"><MessageCircle size={20} /><span><small>{t.footerContact}</small><b dir="ltr">{PHONE_DISPLAY}</b></span><ArrowUpRight size={19} /></a></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Mm Cnc</span><span><ShieldCheck size={15} />{t.footerLocal}</span><span>{t.footerLabel}</span></div></footer>
     </div>
   );
 }
