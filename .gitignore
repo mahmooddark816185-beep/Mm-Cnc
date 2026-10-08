@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-pages-redirect/
 .env
 .env.*
 !.env.example

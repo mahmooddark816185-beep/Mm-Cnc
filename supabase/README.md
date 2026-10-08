@@ -1,11 +1,15 @@
 # Accounts, image allowance, and manual Sham Cash subscriptions
 
-This backend is prepared but remains inactive until the migration is deployed to
-the intended Supabase project and that project's public configuration is added to
-the application. Merely committing these files does not create accounts, collect
-payments, or activate subscriptions.
+The backend is active for <https://mm-cnc.pages.dev/>. Hosted database protections,
+GitHub sign-in, account allowance, repeated exports, and owner administration have
+been verified. See [deployment status](DEPLOYMENT.md) for evidence and remaining
+transition work. A real received Sham Cash payment has not been approved end to
+end. Committing these files alone never creates accounts or verifies payments.
 
-## Deploy
+## Deploy a new environment
+
+The migration has already been applied to the production project. Do not run it
+again there. The steps below describe initial setup or a separate environment.
 
 1. Create/select the intended Supabase project. In Authentication, configure a
    supported sign-in provider. For email/password enable **Confirm email** and
@@ -16,10 +20,11 @@ payments, or activate subscriptions.
    them. Signing into the Supabase dashboard with GitHub is a separate action
    from signing into this website.
 2. Set the Auth Site URL to
-   `https://mahmooddark816185-beep.github.io/Mm-Cnc/` and add that exact application
-   URL to allowed redirect URLs. Add local development URLs separately if needed.
-   Configure production email delivery and test confirmation/password recovery
-   before inviting customers.
+   `https://mm-cnc.pages.dev/` and add that exact application URL and
+   `https://mm-cnc.pages.dev/#account` to allowed redirect URLs. Add local
+   development URLs separately if needed. If enabling email/password sign-in,
+   configure production email delivery and test confirmation/password recovery
+   first; production currently uses GitHub sign-in only.
 3. Run `migrations/202610080001_accounts_quota_payments.sql` once in the Supabase
    SQL Editor as the database owner, or apply it with your normal Supabase
    migration workflow. It runs in one transaction and creates new tables and
@@ -34,9 +39,12 @@ payments, or activate subscriptions.
    In this repository those public build variables are `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_ANON_KEY`. Enable tested providers using
    `VITE_ENABLE_GITHUB_AUTH=true` and/or `VITE_ENABLE_EMAIL_AUTH=true`.
-   Keep other providers disabled. The deployed workflow reads these values from
-   GitHub Actions repository variables; rebuild after changing them. An incomplete
-   configuration blocks authorization rather than allowing unlimited downloads.
+   Keep other providers disabled. Cloudflare Pages reads these values from its
+   build environment variables; rebuild after changing them. Use
+   `VITE_BASE_PATH=/`, build command `npm run build`, and output directory `dist`.
+   The GitHub Pages workflow only publishes a legacy redirect and does not build
+   this application. An incomplete configuration blocks authorization rather
+   than allowing unlimited downloads.
 6. Create and confirm the owner's website account. Promote that exact account
    using the SQL below. No signup field, user metadata, JWT metadata, frontend
    email list, or client-supplied `is_admin` value can grant administrator access.
