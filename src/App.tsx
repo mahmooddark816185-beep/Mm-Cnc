@@ -78,10 +78,10 @@ function DemoArtwork({ language }: { language: Language }) {
       <circle cx="380" cy="174" r="6" fill="#ec744c" />
       <path d="M386 174 H458 V138" stroke="#ec744c" strokeWidth="1.5" />
       <rect x="425" y="105" width="94" height="34" rx="3" fill="#173d45" />
-      <text x="437" y="127" fill="white" fontFamily="IBM Plex Sans Arabic, Space Grotesk, sans-serif" fontSize="10">{t.demoPath}</text>
+      <text x="472" y="127" textAnchor="middle" fill="white" fontFamily="IBM Plex Sans Arabic, Space Grotesk, sans-serif" fontSize="10">{t.demoPath}</text>
       <path d="M107 258 V282 H83" stroke="#ec744c" strokeWidth="1.5" />
       <rect x="23" y="279" width="79" height="28" rx="3" fill="#ec744c" />
-      <text x="33" y="297" fill="white" fontFamily="IBM Plex Sans Arabic, Space Grotesk, sans-serif" fontSize="9">{t.demoOrigin}</text>
+      <text x="62" y="297" textAnchor="middle" fill="white" fontFamily="IBM Plex Sans Arabic, Space Grotesk, sans-serif" fontSize="9">{t.demoOrigin}</text>
     </svg>
   );
 }
