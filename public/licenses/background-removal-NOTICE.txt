@@ -1,0 +1,17 @@
+Background removal components
+
+U²-Net: Going Deeper with Nested U-Structure for Salient Object Detection
+Xuebin Qin, Zichen Zhang, Chenyang Huang, Masood Dehghan,
+Osmar R. Zaiane and Martin Jagersand. Pattern Recognition, 2020.
+https://github.com/xuebinqin/U-2-Net
+License: Apache-2.0 (see U2Net-Apache-2.0.txt).
+
+The unmodified ONNX model is distributed by rembg and retrieved from a pinned
+Hugging Face mirror; its checksum is verified by the application.
+https://github.com/danielgatis/rembg
+https://huggingface.co/jellybox/u2net
+
+ONNX Runtime Web 1.22.0
+Copyright (c) Microsoft Corporation.
+https://github.com/microsoft/onnxruntime
+License: MIT (see ONNX-Runtime-MIT.txt).

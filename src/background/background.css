@@ -1,0 +1,56 @@
+.background-tools {
+  margin-block: 0 24px;
+  padding-block: 20px;
+  border-block: 1px solid var(--soft-line);
+}
+.background-heading { display: flex; align-items: center; gap: 9px; color: var(--teal); }
+.background-heading h3 { margin: 0; color: var(--ink); font-size: 14px; }
+.background-optional { margin-inline-start: auto; padding: 2px 7px; background: #eaf4f1; color: #376f67; font-size: 10px; font-weight: 600; }
+.background-description { margin: 10px 0 14px; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.background-controls { min-width: 0; padding: 0; margin: 0; border: 0; }
+.background-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.background-methods button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 6px; border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 11px; font-weight: 600; }
+.background-methods button[aria-pressed="true"] { border-color: var(--teal); background: #e9f5f1; color: #236d70; box-shadow: inset 0 -2px 0 var(--teal); }
+.background-methods button:not(:disabled):hover { border-color: var(--teal); color: var(--teal); }
+.background-methods svg { flex: none; }
+.background-controls:disabled .background-methods button { cursor: not-allowed; opacity: .65; }
+.background-method-details { padding-block: 10px 12px; font-size: 11px; line-height: 1.8; }
+.background-method-details > p { margin: 0 0 9px; color: var(--muted); }
+.background-method-details > .background-download-note { padding: 10px; background: #f0f6f4; border-inline-start: 2px solid #95bdb5; font-size: 10px; line-height: 1.8; }
+.background-check { display: flex; align-items: start; gap: 8px; padding-block: 8px; color: var(--ink); cursor: pointer; }
+.background-check input { flex: none; margin: 4px 0 0; width: 15px; height: 15px; accent-color: var(--teal); }
+.background-check small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.background-color { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-block: 5px 12px; }
+.background-color input { width: 56px; height: 33px; padding: 3px; background: white; border: 1px solid var(--line); cursor: pointer; }
+.background-range { display: block; margin-block: 12px; }
+.background-range > span { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-weight: 600; }
+.background-range output { color: var(--teal); font: 600 11px 'Space Grotesk', sans-serif; }
+.background-range input { display: block; margin: 10px 0 7px; height: 6px; }
+.background-range small { display: block; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.background-method-details > .background-manual-note { margin-block: 9px 0; color: #36736e; font-size: 10px; }
+.background-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.background-actions button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 39px; padding: 8px 11px; font-size: 11px; font-weight: 600; }
+.background-apply { flex: 1; border: 1px solid var(--teal); background: var(--teal); color: white; }
+.background-apply:not(:disabled):hover { background: #1d6266; }
+.background-cancel { flex: 1; border: 1px solid #ad5b3c; background: #fff6f0; color: #944627; }
+.background-cancel:hover { background: #fbe9df; }
+.background-restore { border: 1px solid var(--line); background: white; color: var(--teal); }
+.background-restore:not(:disabled):hover { border-color: var(--teal); background: #f1f7f5; }
+.background-actions button:disabled { opacity: .45; }
+.background-upload-hint { margin: 10px 0 0; color: var(--muted); font-size: 10px; }
+.background-status { color: var(--teal); font-size: 11px; line-height: 1.8; }
+.background-progress-label { display: flex; align-items: center; gap: 7px; margin-top: 13px; }
+.background-progress-label b { margin-inline-start: auto; font: 600 11px 'Space Grotesk', sans-serif; }
+.background-status progress { display: block; width: 100%; height: 6px; margin-top: 9px; border: 0; accent-color: var(--teal); }
+.background-status > small { display: block; margin-top: 5px; font-size: 10px; }
+.background-status > small b { font-weight: 500; }
+.background-message { display: flex; align-items: start; gap: 6px; padding: 9px 10px; background: #eff7f3; margin: 11px 0 0; }
+.background-message svg { margin-top: 3px; flex: none; }
+.background-error { background: #fff1e9; color: #a54828; border: 1px solid #ebc6b5; }
+.background-spinner { flex: none; animation: background-spin 1.1s linear infinite; }
+@keyframes background-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .background-spinner { animation: none; } }
+@media (max-width: 420px) {
+  .background-actions { align-items: stretch; }
+  .background-actions button { flex: 1 1 140px; }
+}

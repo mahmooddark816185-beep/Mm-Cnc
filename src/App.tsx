@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, Check, Crosshair, Download, FileImage,
@@ -12,12 +12,14 @@ import {
 } from './engine';
 import { exportBinaryMaskToStl } from './engine/stl';
 import { assertSafeImageDimensions, probeImageDimensions } from './imageProbe';
+import { exportRasterPng } from './raster';
+import { BackgroundTools } from './background/BackgroundTools';
 
 const PHONE_DISPLAY = '00963981512543';
 const WHATSAPP_URL = 'https://wa.me/963981512543';
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const SUPPORTED_IMAGE = /\.(png|jpe?g|webp|bmp)$/i;
-type ExportFormat = 'dxf' | 'svg' | 'stl' | 'gcode';
+type ExportFormat = 'png' | 'dxf' | 'svg' | 'stl' | 'gcode';
 
 function getInitialLanguage(): Language {
   try {
@@ -92,6 +94,14 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileSelectionId = useRef(0);
   const [source, setSource] = useState<File | null>(null);
+  const [preparedBlob, setPreparedBlob] = useState<Blob | null>(null);
+  const activeBlob = preparedBlob ?? source;
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
+  const [decodedBlob, setDecodedBlob] = useState<Blob | null>(null);
+  const [rasterDimensions, setRasterDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'paths' | 'image'>('paths');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageData, setImageData] = useState<ImageDataLike | null>(null);
   const [vectorUrl, setVectorUrl] = useState<string | null>(null);
@@ -114,6 +124,27 @@ export default function App() {
   const [machineReviewed, setMachineReviewed] = useState(false);
   const [compare, setCompare] = useState(50);
 
+  const handleBackgroundResult = useCallback((blob: Blob | null) => {
+    setPreparedBlob(blob);
+    setPreviewMode('image');
+    setCompare(50);
+    setExportError('');
+  }, []);
+
+  useEffect(() => {
+    if (!source) { setOriginalUrl(null); return; }
+    const url = URL.createObjectURL(source);
+    setOriginalUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [source]);
+
+  useEffect(() => {
+    if (!preparedBlob) { setCutoutUrl(null); return; }
+    const url = URL.createObjectURL(preparedBlob);
+    setCutoutUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [preparedBlob]);
+
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -121,16 +152,19 @@ export default function App() {
   }, [language]);
 
   useEffect(() => {
-    if (!source) {
+    if (!activeBlob) {
       setImageData(null);
       setImageUrl(null);
+      setRasterDimensions(null);
+      setDecodedBlob(null);
       return;
     }
     let cancelled = false;
-    const url = URL.createObjectURL(source);
+    const url = URL.createObjectURL(activeBlob);
     const image = new Image();
     setImageData(null);
     setImageUrl(null);
+    setDecodedBlob(null);
     setFileError('');
     image.onload = () => {
       if (cancelled) return;
@@ -153,6 +187,8 @@ export default function App() {
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
         setImageData(context.getImageData(0, 0, canvas.width, canvas.height));
         setImageUrl(canvas.toDataURL('image/png'));
+        setRasterDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+        setDecodedBlob(activeBlob);
       } catch {
         setFileError(t.decodeError);
       }
@@ -163,10 +199,10 @@ export default function App() {
       cancelled = true;
       URL.revokeObjectURL(url);
     };
-  }, [source, resolution, t.decodeError]);
+  }, [activeBlob, resolution, t.decodeError]);
 
   const processed = useMemo<{ result: VectorResult | null; error: boolean }>(() => {
-    if (!imageData) return { result: null, error: false };
+    if (!imageData || decodedBlob !== activeBlob) return { result: null, error: false };
     try {
       return {
         result: vectorizeImageData(imageData, {
@@ -177,7 +213,7 @@ export default function App() {
     } catch {
       return { result: null, error: true };
     }
-  }, [imageData, threshold, invert, noise, smooth]);
+  }, [imageData, decodedBlob, activeBlob, threshold, invert, noise, smooth]);
   const result = processed.result;
 
   useEffect(() => {
@@ -190,7 +226,8 @@ export default function App() {
 
   const mmPerPixel = result ? widthMm / result.width : 1;
   const heightMm = result && Number.isFinite(mmPerPixel) ? result.height * mmPerPixel : 0;
-  const canExport = Boolean(result && result.contours.length > 0 && !busyFormat);
+  const canExport = Boolean(result && result.contours.length > 0 && !busyFormat && !backgroundBusy);
+  const canExportPng = Boolean(activeBlob && decodedBlob === activeBlob && !busyFormat && !backgroundBusy);
 
   async function acceptFile(file?: File): Promise<void> {
     if (!file) return;
@@ -209,6 +246,8 @@ export default function App() {
     if (fileSelectionId.current !== selectionId) return;
     setFileError('');
     setExportError('');
+    setPreparedBlob(null);
+    setPreviewMode('paths');
     setSource(file);
   }
 
@@ -249,34 +288,44 @@ export default function App() {
   }
 
   async function download(format: ExportFormat): Promise<void> {
-    if (!result || !canExport) return;
+    if (format === 'png' ? !canExportPng : !canExport) return;
     setExportError('');
-    if (!Number.isFinite(mmPerPixel) || mmPerPixel <= 0 || widthMm > 3000 ||
-      (format === 'stl' && (!Number.isFinite(thicknessMm) || thicknessMm <= 0))) {
+    if (format !== 'png' && (!Number.isFinite(mmPerPixel) || mmPerPixel <= 0 || widthMm > 3000 ||
+      (format === 'stl' && (!Number.isFinite(thicknessMm) || thicknessMm <= 0)))) {
       setExportError(t.invalidDimensions);
       return;
     }
     if (format === 'gcode' && !machineReviewed) { setExportError(t.gcodeReview); return; }
+    const selectionId = fileSelectionId.current;
+    const isCurrent = () => fileSelectionId.current === selectionId;
+    const saveCurrentBlob = (blob: Blob, name: string) => { if (isCurrent()) saveBlob(blob, name); };
     setBusyFormat(format);
     await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
     try {
+      if (!isCurrent()) return;
       const basename = (source?.name || 'drawing').replace(/\.[^.]+$/, '')
         .replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 60) || 'drawing';
+      if (format === 'png' && activeBlob) {
+        saveCurrentBlob(await exportRasterPng(activeBlob), `${basename}${preparedBlob ? '-cutout' : ''}.png`);
+        return;
+      }
+      if (!result) return;
       if (format === 'dxf') {
-        saveBlob(new Blob([exportDxf(result, { mmPerPixel })], { type: 'application/dxf' }), `${basename}.dxf`);
+        saveCurrentBlob(new Blob([exportDxf(result, { mmPerPixel })], { type: 'application/dxf' }), `${basename}.dxf`);
       } else if (format === 'svg') {
-        saveBlob(new Blob([exportSvg(result, { scale: mmPerPixel, unit: 'mm' })], { type: 'image/svg+xml' }), `${basename}.svg`);
+        saveCurrentBlob(new Blob([exportSvg(result, { scale: mmPerPixel, unit: 'mm' })], { type: 'image/svg+xml' }), `${basename}.svg`);
       } else if (format === 'stl') {
         const bytes = exportBinaryMaskToStl(result.mask, result.width, result.height,
           { pixelSizeMm: mmPerPixel, thicknessMm });
-        saveBlob(new Blob([new Uint8Array(bytes)], { type: 'model/stl' }), `${basename}.stl`);
+        saveCurrentBlob(new Blob([new Uint8Array(bytes)], { type: 'model/stl' }), `${basename}.stl`);
       } else {
         const program = exportGcode(result, {
           mmPerPixel, safeZ, cutZ: -cutDepth, feedRate, plungeRate, spindleRpm,
         });
-        saveBlob(new Blob([program], { type: 'text/plain' }), `${basename}.nc`);
+        saveCurrentBlob(new Blob([program], { type: 'text/plain' }), `${basename}.nc`);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : '';
       setExportError(format === 'stl' && /exceed|large|limit|triangle/i.test(message)
         ? t.stlTooLarge : t.exportError);
@@ -286,6 +335,7 @@ export default function App() {
   }
 
   const formats = [
+    { key: 'png' as const, icon: <FileImage size={22} strokeWidth={1.7} />, title: t.pngTitle, body: t.pngBody, tag: 'PNG' },
     { key: 'dxf' as const, icon: <Crosshair size={22} strokeWidth={1.7} />, title: t.dxfTitle, body: t.dxfBody, tag: 'CAD' },
     { key: 'svg' as const, icon: <ScanLine size={22} strokeWidth={1.7} />, title: t.svgTitle, body: t.svgBody, tag: 'VECTOR' },
     { key: 'stl' as const, icon: <Layers3 size={22} strokeWidth={1.7} />, title: t.stlTitle, body: t.stlBody, tag: '3D MESH' },
@@ -359,6 +409,8 @@ export default function App() {
                 </div>
               </div>
               {(fileError || processed.error) && <div role="alert" className="inline-alert">{fileError || t.processingError}</div>}
+              <BackgroundTools language={language} source={source} disabled={Boolean(busyFormat)}
+                onResult={handleBackgroundResult} onBusyChange={setBackgroundBusy} />
               <div className="setting-title"><SlidersHorizontal size={18} /><h3>{t.controls}</h3></div>
               <div className="range-setting"><div className="setting-label"><label htmlFor="threshold">{t.threshold}</label><b>{threshold}</b></div><input id="threshold" type="range" min="0" max="255" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /><small>{t.thresholdHelp}</small></div>
               <div className="range-setting"><div className="setting-label"><label htmlFor="noise">{t.noise}</label><b>{noise} px</b></div><input id="noise" type="range" min="1" max="64" value={noise} onChange={(event) => setNoise(Number(event.target.value))} /><small>{t.noiseHelp}</small></div>
@@ -372,18 +424,29 @@ export default function App() {
 
             <div className="preview-panel">
               <div className="panel-head"><span className="panel-index">{t.previewPanel}</span><span className="panel-head-icon"><ScanLine size={18} /></span></div>
-              <div className="preview-title"><h3>{t.preview}</h3><span>{result ? `${result.width} × ${result.height} ${t.pixels}` : '— × —'}</span></div>
-              <div className="preview-stage">
-                {imageUrl && result && vectorUrl ? <>
-                  <div className="preview-image-layer"><img src={imageUrl} alt={t.original} /></div>
+              <div className="preview-title"><h3>{t.preview}</h3><span>{previewMode === 'image' && rasterDimensions
+                ? `${rasterDimensions.width} × ${rasterDimensions.height} ${t.pixels}`
+                : result ? `${result.width} × ${result.height} ${t.pixels}` : '— × —'}</span></div>
+              <div className="preview-mode-tabs" role="group" aria-label={t.previewMode}>
+                <button type="button" aria-pressed={previewMode === 'paths'} onClick={() => setPreviewMode('paths')}><ScanLine size={15} />{t.pathsPreview}</button>
+                <button type="button" aria-pressed={previewMode === 'image'} onClick={() => setPreviewMode('image')}><FileImage size={15} />{t.imagePreview}</button>
+              </div>
+              <div className={`preview-stage${previewMode === 'image' ? ' transparency-grid' : ''}`}>
+                {previewMode === 'image' && originalUrl ? <>
+                  <div className="preview-image-layer"><img src={originalUrl} alt={t.original} /></div>
+                  <div className="preview-vector-layer transparency-grid" style={{ clipPath: `inset(0 0 0 ${compare}%)` }}><img src={cutoutUrl ?? originalUrl} alt={t.pngPreview} /></div>
+                  <div className="comparison-line" style={{ left: `${compare}%` }}><span>↔</span></div>
+                  <div className="preview-chip chip-original">{t.original}</div><div className="preview-chip chip-vector">{t.pngPreview}</div>
+                </> : imageUrl && result && vectorUrl ? <>
+                  <div className="preview-image-layer"><img src={imageUrl} alt={preparedBlob ? t.editedImage : t.original} /></div>
                   <div className="preview-vector-layer" style={{ clipPath: `inset(0 0 0 ${compare}%)` }}><img src={vectorUrl} alt={t.vector} /></div>
                   <div className="comparison-line" style={{ left: `${compare}%` }}><span>↔</span></div>
-                  <div className="preview-chip chip-original">{t.original}</div><div className="preview-chip chip-vector">{t.vector}</div>
+                  <div className="preview-chip chip-original">{preparedBlob ? t.editedImage : t.original}</div><div className="preview-chip chip-vector">{t.vector}</div>
                 </> : <div className="empty-preview"><div className="empty-graphic"><span className="empty-circle" /><span className="empty-square" /><Crosshair size={27} /></div><strong>{t.previewEmptyTitle}</strong><p>{t.previewEmptyBody}</p></div>}
               </div>
-              {result && vectorUrl && <div className="comparison-control"><label htmlFor="compare">{t.compare}</label><input id="compare" type="range" min="0" max="100" value={compare} onChange={(event) => setCompare(Number(event.target.value))} /></div>}
-              <div className="preview-bottom"><span><span className="status-dot" />{result ? `${result.contours.length} ${t.contours}` : t.localBadge}</span><span>{result && widthMm > 0 ? `${widthMm.toFixed(1)} × ${heightMm.toFixed(1)} mm` : 'DXF / SVG / STL / NC'}</span></div>
-              {result && result.contours.length === 0 && <div className="inline-alert" role="status">{t.noContours}</div>}
+              {(previewMode === 'image' ? originalUrl : result && vectorUrl) && <div className="comparison-control"><label htmlFor="compare">{previewMode === 'image' ? t.compareBackground : t.compare}</label><input id="compare" type="range" min="0" max="100" value={compare} onChange={(event) => setCompare(Number(event.target.value))} /></div>}
+              <div className="preview-bottom"><span><span className="status-dot" />{previewMode === 'image' ? t.pngResolution : result ? `${result.contours.length} ${t.contours}` : t.localBadge}</span><span>{previewMode === 'image' && rasterDimensions ? `${rasterDimensions.width} × ${rasterDimensions.height} px` : result && widthMm > 0 ? `${widthMm.toFixed(1)} × ${heightMm.toFixed(1)} mm` : 'PNG / DXF / SVG / STL / NC'}</span></div>
+              {previewMode === 'paths' && result && result.contours.length === 0 && <div className="inline-alert" role="status">{t.noContours}</div>}
             </div>
           </div>
         </section>
@@ -393,8 +456,8 @@ export default function App() {
           <div className="export-grid">{formats.map((format, index) => <article className="export-card" key={format.key}>
             <div className="export-top"><span className="format-icon">{format.icon}</span><span className="format-index">0{index + 1} / {format.tag}</span></div>
             <div><h3>{format.title}</h3><p>{format.body}</p></div>
-            <button type="button" className="download-button" disabled={!canExport || (format.key === 'gcode' && !machineReviewed)}
-              title={!canExport ? (!source ? t.downloadReady : result?.contours.length === 0 ? t.noContours : undefined) : undefined} onClick={() => void download(format.key)}>
+            <button type="button" className="download-button" disabled={(format.key === 'png' ? !canExportPng : !canExport) || (format.key === 'gcode' && !machineReviewed)}
+              title={!source ? t.downloadReady : undefined} onClick={() => void download(format.key)}>
               <span>{busyFormat === format.key ? t.downloadBusy : `${t.download} .${format.key === 'gcode' ? 'nc' : format.key}`}</span><Download size={17} />
             </button>
           </article>)}</div>
