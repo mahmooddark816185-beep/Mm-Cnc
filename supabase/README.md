@@ -2,8 +2,8 @@
 
 The backend is active for <https://mm-cnc.pages.dev/>. Hosted database protections,
 GitHub sign-in, account allowance, repeated exports, and owner administration have
-been verified. See [deployment status](DEPLOYMENT.md) for evidence and remaining
-transition work. A real received Sham Cash payment has not been approved end to
+been verified. See [deployment status](DEPLOYMENT.md) for evidence, the completed
+hosting transition, and operating limits. A real received Sham Cash payment has not been approved end to
 end. Committing these files alone never creates accounts or verifies payments.
 
 ## Deploy a new environment
