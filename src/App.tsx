@@ -3,7 +3,7 @@ import type { ChangeEvent, DragEvent } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, Check, Crosshair, Download, FileImage,
   FileText, Layers3, MessageCircle, MoveUpRight, ScanLine, Settings2,
-  ShieldCheck, SlidersHorizontal, UploadCloud,
+  ShieldCheck, SlidersHorizontal, UploadCloud, UserRound,
 } from 'lucide-react';
 import { copy, type Language } from './i18n';
 import {
@@ -14,6 +14,8 @@ import { exportBinaryMaskToStl } from './engine/stl';
 import { assertSafeImageDimensions, probeImageDimensions } from './imageProbe';
 import { exportRasterPng } from './raster';
 import { BackgroundTools } from './background/BackgroundTools';
+import { useMembership } from './membership/useMembership';
+import { MembershipPanel } from './membership/MembershipPanel';
 
 const PHONE_DISPLAY = '00963981512543';
 const WHATSAPP_URL = 'https://wa.me/963981512543';
@@ -92,6 +94,8 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(getInitialLanguage);
   const t = copy[language];
   const inputRef = useRef<HTMLInputElement>(null);
+  const membership = useMembership(language);
+  const exportBusy = useRef(false);
   const fileSelectionId = useRef(0);
   const [source, setSource] = useState<File | null>(null);
   const [preparedBlob, setPreparedBlob] = useState<Blob | null>(null);
@@ -230,7 +234,7 @@ export default function App() {
   const canExportPng = Boolean(activeBlob && decodedBlob === activeBlob && !busyFormat && !backgroundBusy);
 
   async function acceptFile(file?: File): Promise<void> {
-    if (!file) return;
+    if (!file || exportBusy.current) return;
     const selectionId = ++fileSelectionId.current;
     if (!SUPPORTED_IMAGE.test(file.name)) { setFileError(t.unsupported); return; }
     if (file.size > MAX_FILE_BYTES) { setFileError(t.fileTooLarge); return; }
@@ -243,7 +247,7 @@ export default function App() {
       }
       return;
     }
-    if (fileSelectionId.current !== selectionId) return;
+    if (fileSelectionId.current !== selectionId || exportBusy.current) return;
     setFileError('');
     setExportError('');
     setPreparedBlob(null);
@@ -263,6 +267,7 @@ export default function App() {
   }
 
   function makeSample(): void {
+    if (exportBusy.current) return;
     const canvas = document.createElement('canvas');
     canvas.width = 520;
     canvas.height = 360;
@@ -288,6 +293,7 @@ export default function App() {
   }
 
   async function download(format: ExportFormat): Promise<void> {
+    if (exportBusy.current) return;
     if (format === 'png' ? !canExportPng : !canExport) return;
     setExportError('');
     if (format !== 'png' && (!Number.isFinite(mmPerPixel) || mmPerPixel <= 0 || widthMm > 3000 ||
@@ -297,8 +303,17 @@ export default function App() {
     }
     if (format === 'gcode' && !machineReviewed) { setExportError(t.gcodeReview); return; }
     const selectionId = fileSelectionId.current;
-    const isCurrent = () => fileSelectionId.current === selectionId;
-    const saveCurrentBlob = (blob: Blob, name: string) => { if (isCurrent()) saveBlob(blob, name); };
+    const authVersion = membership.getAuthVersion();
+    const isCurrent = () => fileSelectionId.current === selectionId && membership.getAuthVersion() === authVersion;
+    const saveCurrentBlob = async (blob: Blob, name: string) => {
+      if (!isCurrent() || !source) return;
+      if (!await membership.authorizeImage(source, authVersion, isCurrent)) {
+        document.getElementById('account')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (isCurrent()) saveBlob(blob, name);
+    };
+    exportBusy.current = true;
     setBusyFormat(format);
     await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
     try {
@@ -306,23 +321,23 @@ export default function App() {
       const basename = (source?.name || 'drawing').replace(/\.[^.]+$/, '')
         .replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 60) || 'drawing';
       if (format === 'png' && activeBlob) {
-        saveCurrentBlob(await exportRasterPng(activeBlob), `${basename}${preparedBlob ? '-cutout' : ''}.png`);
+        await saveCurrentBlob(await exportRasterPng(activeBlob), `${basename}${preparedBlob ? '-cutout' : ''}.png`);
         return;
       }
       if (!result) return;
       if (format === 'dxf') {
-        saveCurrentBlob(new Blob([exportDxf(result, { mmPerPixel })], { type: 'application/dxf' }), `${basename}.dxf`);
+        await saveCurrentBlob(new Blob([exportDxf(result, { mmPerPixel })], { type: 'application/dxf' }), `${basename}.dxf`);
       } else if (format === 'svg') {
-        saveCurrentBlob(new Blob([exportSvg(result, { scale: mmPerPixel, unit: 'mm' })], { type: 'image/svg+xml' }), `${basename}.svg`);
+        await saveCurrentBlob(new Blob([exportSvg(result, { scale: mmPerPixel, unit: 'mm' })], { type: 'image/svg+xml' }), `${basename}.svg`);
       } else if (format === 'stl') {
         const bytes = exportBinaryMaskToStl(result.mask, result.width, result.height,
           { pixelSizeMm: mmPerPixel, thicknessMm });
-        saveCurrentBlob(new Blob([new Uint8Array(bytes)], { type: 'model/stl' }), `${basename}.stl`);
+        await saveCurrentBlob(new Blob([new Uint8Array(bytes)], { type: 'model/stl' }), `${basename}.stl`);
       } else {
         const program = exportGcode(result, {
           mmPerPixel, safeZ, cutZ: -cutDepth, feedRate, plungeRate, spindleRpm,
         });
-        saveCurrentBlob(new Blob([program], { type: 'text/plain' }), `${basename}.nc`);
+        await saveCurrentBlob(new Blob([program], { type: 'text/plain' }), `${basename}.nc`);
       }
     } catch (error) {
       if (!isCurrent()) return;
@@ -330,6 +345,7 @@ export default function App() {
       setExportError(format === 'stl' && /exceed|large|limit|triangle/i.test(message)
         ? t.stlTooLarge : t.exportError);
     } finally {
+      exportBusy.current = false;
       setBusyFormat(null);
     }
   }
@@ -353,8 +369,10 @@ export default function App() {
           <a href="#studio">{t.navStudio}</a>
           <a href="#formats">{t.navFormats}</a>
           <a href="#how">{t.navHow}</a>
+          {membership.configured && <a href="#account">{language === 'ar' ? 'حسابي والاشتراك' : 'Account & plan'}</a>}
         </nav>
         <div className="header-actions">
+          {membership.configured && <a className="account-shortcut" href="#account" aria-label={language === 'ar' ? 'حسابي والاشتراك' : 'Account & plan'}><UserRound size={19} /></a>}
           <button className="language-switch" type="button" onClick={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
             aria-label={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}>
             <span className={language === 'ar' ? 'active' : ''}>ع</span><i />
@@ -391,6 +409,8 @@ export default function App() {
 
         <div className="ticker" aria-hidden="true"><span>{t.tickerRaster}</span><i /><span>{t.tickerVector}</span><i /><span>{t.tickerScale}</span><i /><span>{t.tickerCad}</span><i /><span>MM CNC</span></div>
 
+        <MembershipPanel language={language} membership={membership} />
+
         <section className="studio section-pad" id="studio">
           <div className="section-heading">
             <div><div className="eyebrow"><span className="eyebrow-line" />{t.studioEyebrow}</div><h2>{t.studioTitle}</h2><p>{t.studioBody}</p></div>
@@ -400,11 +420,11 @@ export default function App() {
             <div className="settings-panel">
               <div className="panel-head"><span className="panel-index">{t.inputPanel}</span><span className="panel-head-icon"><FileImage size={18} /></span></div>
               <div className={`upload-zone${isDragging ? ' drag-active' : ''}`} onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={handleDrop}>
-                <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,image/png,image/jpeg,image/webp,image/bmp" onChange={handleChoose} className="visually-hidden" aria-label={t.browse} />
+                <input ref={inputRef} type="file" disabled={Boolean(busyFormat)} accept=".png,.jpg,.jpeg,.webp,.bmp,image/png,image/jpeg,image/webp,image/bmp" onChange={handleChoose} className="visually-hidden" aria-label={t.browse} />
                 <div className="upload-icon"><UploadCloud size={28} strokeWidth={1.5} /></div>
                 <strong>{source ? t.selected : t.dropTitle}</strong>
                 <span className={source ? 'filename' : 'muted'}>{source ? source.name : t.dropBody}</span>
-                <div className="upload-actions"><button type="button" className="outline-button" onClick={() => inputRef.current?.click()}>{source ? t.change : t.browse}<ArrowUpRight size={16} /></button>
+                <div className="upload-actions"><button type="button" className="outline-button" disabled={Boolean(busyFormat)} onClick={() => inputRef.current?.click()}>{source ? t.change : t.browse}<ArrowUpRight size={16} /></button>
                   {!source && <button type="button" className="subtle-button" onClick={makeSample}>{t.sample}</button>}
                 </div>
               </div>

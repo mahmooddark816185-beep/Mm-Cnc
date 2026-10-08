@@ -143,6 +143,7 @@ input[type=range] { width: 100%; accent-color: var(--teal); cursor: pointer; }
 .inline-alert { padding: 10px 13px; margin: 10px 0; border: 1px solid #ebc6b5; background: #fff1e9; color: #a54828; font-size: 12px; line-height: 1.7; }
 .preview-panel { display: flex; flex-direction: column; position: sticky; top: 20px; align-self: start; }
 .preview-mode-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.account-shortcut { display: inline-flex; align-items: center; justify-content: center; padding: 9px; border: 1px solid var(--line); color: var(--teal); }
 .preview-mode-tabs button { display: flex; align-items: center; justify-content: center; gap: 7px; flex: 1; min-height: 37px; border: 1px solid var(--line); background: white; color: var(--muted); padding: 7px 10px; font-size: 11px; font-weight: 600; }
 .preview-mode-tabs button[aria-pressed="true"] { border-color: var(--teal); background: #e9f5f1; color: var(--teal); }
 .preview-mode-tabs button:disabled { opacity: .45; }
